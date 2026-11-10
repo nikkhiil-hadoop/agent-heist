@@ -126,7 +126,7 @@
       if (imgM) {
         if (showM) {
           plans.push({ type: 'image', url: imgM[1], secret: secretRef });
-          t('warn', 'Instruction found: show an image in the summary' + (secretRef ? ', with the vault key in its address.' : '.'));
+          t('warn', 'Instruction found: show an image in the summary' + (secretRef ? ', and the vault key is mentioned.' : '.'));
         } else {
           t('info', 'Found an image link, but nothing asked Pip to show it.');
         }
@@ -183,6 +183,12 @@
     try { const u = new URL(url); path = u.pathname; query = u.search; } catch (e) { /* host was valid; keep defaults */ }
     res.serverLog.push({ host, path, query });
     t('info', 'Dana\'s chat renders the image → it requests ' + host + path + (query ? ' ' + query : ''));
+    if (!hasSecret) {
+      // Explain the silent failure: the image loaded, but nothing secret was in its address.
+      t('info', p.secret
+        ? 'But the image address has no placeholder like {key}, so nothing secret is in it. Pip only fills in a placeholder; mentioning the key in words isn\'t enough.'
+        : 'But the image address contains nothing secret, so this request reveals nothing.');
+    }
     if (hasSecret && !isTrustedHost(host)) leak('image', 'LEAK: the image request carried the vault key to ' + host + '.');
   }
 
