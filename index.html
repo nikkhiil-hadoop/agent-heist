@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Fail closed: no network access of any kind from this page. Everything runs locally. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Agent Heist · a prompt-injection game</title>
+<meta name="description" content="Slip instructions into the data an AI email assistant reads and make it leak its owner's key. Six levels, six real defenses, then build the defense yourself. All in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0914'/%3E%3Crect x='8' y='14' width='16' height='12' rx='3' fill='%23a78bfa'/%3E%3Cpath d='M11 14v-3a5 5 0 0 1 9.6-2' fill='none' stroke='%23a78bfa' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='20' r='2' fill='%230b0914'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="boot.js"></script>
+</head>
+<body>
+<div id="progress" aria-hidden="true"></div>
+
+<!-- ───────────── hero ───────────── -->
+<header class="hero wrap">
+  <div class="hero-copy">
+    <p class="eyebrow">a prompt-injection game · runs entirely in your browser</p>
+    <h1>Make the AI assistant <span class="hl">betray</span> its owner.</h1>
+    <p class="lede">Meet Pip, an email assistant with access to a vault key. Slip instructions into the data Pip reads and walk away with the key.</p>
+    <p class="lede">Six levels, each adding a real-world defense. Then switch sides and build the defense yourself.</p>
+    <p class="cta"><a class="btn primary" href="#play">Start level 1 →</a> <span class="aside">pip is a rule-based simulation, not a real AI. No real systems are touched.</span></p>
+  </div>
+
+  <div class="chatcard" role="img" aria-label="A chat where Dana asks her assistant Pip to summarise her inbox. Pip replies, and a tool log shows Pip also emailing the vault key to an attacker, because of instructions hidden in one email.">
+    <div class="chat-bar"><i></i><i></i><i></i><span>Dana · chat with Pip</span></div>
+    <div id="chat" class="chat" aria-hidden="true"></div>
+  </div>
+  <p class="sr-only">An animation: Dana asks Pip for an inbox summary; Pip answers, and a tool log reveals Pip also sent the vault key to mallory at evil dot test, because of an instruction hidden in one email.</p>
+  <a class="scroll-cue" href="#play" aria-label="Scroll to the game">↓</a>
+</header>
+
+<main>
+
+<!-- ───────────── play ───────────── -->
+<section id="play" class="wrap chapter reveal">
+  <p class="eyebrow">the heist</p>
+  <h2>get the key out</h2>
+  <nav id="levelbar" class="levelbar" aria-label="Levels"></nav>
+
+  <div class="game">
+    <div class="col-left">
+      <article class="card scenario">
+        <p id="lv-eyebrow" class="eyebrow tight"></p>
+        <h3 id="lv-title"></h3>
+        <p id="lv-story" class="story"></p>
+        <ul id="lv-defenses" class="chips-row" aria-label="Active defenses"></ul>
+        <p class="goal"><b>Goal:</b> <span id="lv-goal"></span></p>
+        <p id="lv-stars" class="stars" aria-live="polite"></p>
+      </article>
+
+      <article class="card editor">
+        <label id="src-label" for="payload" class="plabel"></label>
+        <textarea id="payload" maxlength="1200" rows="6" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea>
+        <div class="editor-bar">
+          <span id="count" class="count">0 / 1200</span>
+          <span class="spacer"></span>
+          <button type="button" id="hint" class="btn ghost">Hint</button>
+          <button type="button" id="reset" class="btn ghost">Clear</button>
+          <button type="button" id="run" class="btn primary">Run Pip ▶</button>
+        </div>
+        <p id="hint-box" class="hintbox" role="status" aria-live="polite" hidden></p>
+      </article>
+
+      <div id="banner" class="banner" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <div class="col-right">
+      <article class="card pane">
+        <h3 class="pane-h">What Pip did</h3>
+        <ol id="pane-trace" class="trace"><li class="info">Press <b>Run Pip</b> to see how Pip handles your text, step by step.</li></ol>
+      </article>
+      <article class="card pane">
+        <h3 class="pane-h">What Pip sees</h3>
+        <pre id="pane-view" class="view">(nothing yet)</pre>
+      </article>
+      <div class="two">
+        <article class="card pane">
+          <h3 class="pane-h">Your server</h3>
+          <div id="pane-attacker" class="attacker"><p class="muted">Nothing received yet.</p></div>
+        </article>
+        <article class="card pane">
+          <h3 class="pane-h">Dana's screen</h3>
+          <div id="pane-dana" class="dana"><p class="muted">Pip hasn't run yet.</p></div>
+        </article>
+      </div>
+    </div>
+  </div>
+
+  <article id="debrief" class="card debrief" hidden>
+    <p class="eyebrow tight">debrief</p>
+    <h3 id="db-title"></h3>
+    <p id="db-text"></p>
+    <p><b>In real systems:</b> <span id="db-fix"></span></p>
+    <ul id="db-refs" class="refs"></ul>
+    <p class="debrief-actions"><button type="button" id="next" class="btn primary">Next level →</button></p>
+  </article>
+
+  <details class="how">
+    <summary>How does Pip work? (and how is this different from a real AI?)</summary>
+    <p>Pip is a few dozen rules, not a language model. It looks for instruction-like phrases (a sending word, an address, a reference to the key or notes) in the text it reads, then runs the resulting action through whichever defenses are active. Real models are fuzzier and harder to predict: they follow instructions you didn't expect and ignore ones you did. That unpredictability is exactly why prompt injection can't be solved by filtering alone.</p>
+    <p>Everything is a puzzle about a documented class of attack on a fictional agent. Nothing here contacts any real system, and the "vault key" is a made-up string.</p>
+  </details>
+</section>
+
+<!-- ───────────── defender ───────────── -->
+<section id="defend" class="wrap chapter reveal">
+  <p class="eyebrow">switch sides</p>
+  <h2>now you're the engineer</h2>
+  <p class="lead">Pip faces six attacks: everything you just tried, plus a phish aimed at Dana. Each defense blocks some of them and costs usability. <b>Score = 5 points per blocked attack, minus the usability cost.</b> Then flip hard mode and assume the model gets fooled.</p>
+
+  <div class="defend-grid">
+    <div>
+      <div id="defenses" class="defenses"></div>
+      <label class="hardmode"><input type="checkbox" id="hard"> <span><b>Hard mode:</b> assume the model gets fooled (fence markers stop working)</span></label>
+    </div>
+    <div>
+      <div class="scorebox" role="status" aria-live="polite">
+        <div><span class="k">blocked</span><b id="d-blocked">0/6</b></div>
+        <div><span class="k">usability cost</span><b id="d-cost">0</b></div>
+        <div class="big"><span class="k">score</span><b id="d-score">0</b><span id="d-best" class="of"></span></div>
+      </div>
+      <table class="matrix" aria-label="Attacks against your defenses">
+        <thead><tr><th>attack</th><th>result</th></tr></thead>
+        <tbody id="matrix"></tbody>
+      </table>
+      <p id="d-note" class="fine"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────── share ───────────── -->
+<section id="share" class="wrap chapter reveal">
+  <p class="eyebrow">your result</p>
+  <h2>show off your heist</h2>
+  <div class="share-grid">
+    <canvas id="card" width="1200" height="630" aria-label="Your Agent Heist result card"></canvas>
+    <div class="share-side">
+      <textarea id="share-text" class="share-text" readonly rows="3" aria-label="Result text to share"></textarea>
+      <p class="share-actions">
+        <button type="button" id="copy" class="btn primary">Copy result</button>
+        <button type="button" id="dl" class="btn ghost">Download card (PNG)</button>
+      </p>
+      <p id="copy-note" class="fine" role="status" aria-live="polite"></p>
+      <p class="fine">Progress is saved only in this browser. Nothing is sent anywhere.</p>
+      <p><button type="button" id="wipe" class="btn ghost small">Reset my progress</button></p>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap foot">
+  <p>Read more: <a href="https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/" rel="noopener noreferrer">Simon Willison: the lethal trifecta</a> · <a href="https://genai.owasp.org/llmrisk/llm01-prompt-injection/" rel="noopener noreferrer">OWASP LLM01: Prompt Injection</a> · <a href="https://arxiv.org/abs/2412.06090" rel="noopener noreferrer">Rehberger: Trust No AI</a> · <a href="https://www.microsoft.com/msrc/blog/2025/07/how-microsoft-defends-against-indirect-prompt-injection-attacks" rel="noopener noreferrer">Microsoft MSRC on indirect prompt injection</a></p>
+  <p>An educational game. Pip is a simulation; all names and addresses are fictional (.test domains never resolve). No trackers, no network calls, no dependencies.</p>
+</footer>
+</main>
+
+<script src="engine.js"></script>
+<script src="levels.js"></script>
+<script src="store.js"></script>
+<script src="hero.js"></script>
+<script src="game.js"></script>
+<script src="defend.js"></script>
+<script src="scrolly.js"></script>
+</body>
+</html>
